@@ -4,6 +4,9 @@
 DEFAULT_TEXT="The quick brown fox jumped over the lazy dog. !@#$%^&*()"
 # The percentage to change for each shade step
 SHADE_STEP=15
+# User-specific directory for the color database
+USER_COLORIZE_DIR="$HOME/.local/share/colorize"
+USER_RGB_TXT_PATH="$USER_COLORIZE_DIR/rgb.txt"
 
 # --- Main Functions ---
 
@@ -118,8 +121,9 @@ elif [[ "$color_input" =~ ^\#?[0-9a-fA-F]{6}$ ]]; then
   R=$((16#${hex_color:0:2})); G=$((16#${hex_color:2:2})); B=$((16#${hex_color:4:2}))
 # Fallback to Color Name Lookup
 else
-  # Create an array of common locations for the rgb.txt file
+  # Create an array of common locations for the rgb.txt file, user-path first.
   declare -a rgb_paths=(
+    "$USER_RGB_TXT_PATH"
     "/etc/X11/rgb.txt"
     "/usr/share/X11/rgb.txt"
     "/usr/lib/X11/rgb.txt"
@@ -134,9 +138,27 @@ else
     fi
   done
 
+  # If no file was found, prompt the user to download it.
   if [ -z "$RGB_TXT_PATH" ]; then
-    echo "Error: Could not find the X11 rgb.txt color database." >&2
-    exit 1
+    read -rp "Color database (rgb.txt) not found. Download it now? [y/N] " response
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+      echo "Downloading to $USER_RGB_TXT_PATH..."
+      mkdir -p "$USER_COLORIZE_DIR"
+      local url="https://gitlab.freedesktop.org/xorg/app/rgb/-/raw/master/rgb.txt"
+      if command -v curl &> /dev/null; then
+        curl -fLo "$USER_RGB_TXT_PATH" "$url" || { echo "Download failed with curl." >&2; exit 1; }
+      elif command -v wget &> /dev/null; then
+        wget -qO "$USER_RGB_TXT_PATH" "$url" || { echo "Download failed with wget." >&2; exit 1; }
+      else
+        echo "Error: 'curl' or 'wget' is required to download the color database." >&2
+        exit 1
+      fi
+      echo "Download complete."
+      RGB_TXT_PATH="$USER_RGB_TXT_PATH" # Set path to newly downloaded file
+    else
+      echo "Color name lookup is unavailable without the rgb.txt database." >&2
+      exit 1
+    fi
   fi
   
   # Remove all whitespace from the user's input to match names like 'AliceBlue'
