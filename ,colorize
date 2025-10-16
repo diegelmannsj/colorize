@@ -156,7 +156,8 @@ else
       echo "Download complete."
       RGB_TXT_PATH="$USER_RGB_TXT_PATH" # Set path to newly downloaded file
     else
-      echo "Color name lookup is unavailable without the rgb.txt database." >&2
+      echo "Download declined. Color name lookup is unavailable for this command." >&2
+      echo "Please try again using a HEX (e.g., '#FF0000') or RGB (e.g., '255,0,0') value." >&2
       exit 1
     fi
   fi
