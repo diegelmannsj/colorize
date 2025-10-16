@@ -1,0 +1,162 @@
+#!/bin/bash
+
+# Default text if none is provided
+DEFAULT_TEXT="The quick brown fox jumped over the lazy dog. !@#$%^&*()"
+# The percentage to change for each shade step
+SHADE_STEP=15
+
+# --- Main Functions ---
+
+# Displays usage instructions and exits
+usage() {
+  echo "Usage: $(basename "$0") [options] [<text...>] <color>"
+  echo "  Prints the given text in the specified color."
+  echo
+  echo "Options (case-insensitive):"
+  echo "  -s, --shades          Display the color, plus 5 darker and 5 lighter shades."
+  echo "  -c, --complementary   Display the complementary color."
+  echo "  -cs, -sc              Enable both shades and complementary modes."
+  echo "  -t, --text <string>   Specify the text to color. Overrides positional text."
+  echo
+  echo "Arguments:"
+  echo "  <text...>             (Optional) The string to be colored if -t is not used."
+  echo "  <color>               The base color in 'R,G,B' or '#RRGGBB' format."
+  exit 1
+}
+
+# Takes R, G, B values and text, then prints a formatted, colored line
+print_colored_line() {
+  local r=$1 g=$2 b=$3
+  shift 3
+  local text_to_print="$@"
+  local hex_val; hex_val=$(printf '%02X%02X%02X' "$r" "$g" "$b")
+  printf "#%s - \033[38;2;%s;%s;%sm%s\033[0m\n" "$hex_val" "$r" "$g" "$b" "$text_to_print"
+}
+
+# Calculates and prints all shades for a given color
+generate_shades() {
+  local r=$1 g=$2 b=$3
+  shift 3
+  local text_to_print="$@"
+
+  echo "--- Darker Shades ---"
+  for i in $(seq 5 -1 1); do
+    local factor=$(echo "1 - ($i * $SHADE_STEP) / 100" | bc -l)
+    local dr; dr=$(printf '%.0f' "$(echo "$r * $factor" | bc -l)"); ((dr < 0)) && dr=0
+    local dg; dg=$(printf '%.0f' "$(echo "$g * $factor" | bc -l)"); ((dg < 0)) && dg=0
+    local db; db=$(printf '%.0f' "$(echo "$b * $factor" | bc -l)"); ((db < 0)) && db=0
+    print_colored_line "$dr" "$dg" "$db" "$text_to_print"
+  done
+  
+  echo "--- Base Color ---"
+  print_colored_line "$r" "$g" "$b" "$text_to_print"
+
+  echo "--- Lighter Shades ---"
+  for i in $(seq 1 5); do
+    local factor=$(echo "($i * $SHADE_STEP) / 100" | bc -l)
+    local lr; lr=$(printf '%.0f' "$(echo "$r + (255 - $r) * $factor" | bc -l)"); ((lr > 255)) && lr=255
+    local lg; lg=$(printf '%.0f' "$(echo "$g + (255 - $g) * $factor" | bc -l)"); ((lg > 255)) && lg=255
+    local lb; lb=$(printf '%.0f' "$(echo "$b + (255 - $b) * $factor" | bc -l)"); ((lb > 255)) && lb=255
+    print_colored_line "$lr" "$lg" "$lb" "$text_to_print"
+  done
+}
+
+# Prints the base color and its complement
+print_complementary_colors() {
+  local r=$1 g=$2 b=$3
+  shift 3
+  local text_to_print="$@"
+
+  echo "--- Base Color ---"
+  print_colored_line "$r" "$g" "$b" "$text_to_print"
+  
+  echo "--- Complementary Color ---"
+  local cr=$((255 - r)); local cg=$((255 - g)); local cb=$((255 - b))
+  print_colored_line "$cr" "$cg" "$cb" "$text_to_print"
+}
+
+# --- Script Execution ---
+
+SHADES_MODE=false
+COMPLEMENTARY_MODE=false
+user_text=""
+filtered_args=()
+
+shopt -s nocasematch # Enable case-insensitive matching for flags
+
+# Use a while loop to properly handle flags that take an argument
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -t | --text)
+      if [ -n "$2" ]; then
+        user_text="$2"
+        shift # Consume the flag's argument
+      else
+        echo "Error: $1 flag requires a text argument." >&2
+        exit 1
+      fi
+      ;;
+    -s | --shades)
+      SHADES_MODE=true
+      ;;
+    -c | --complementary)
+      COMPLEMENTARY_MODE=true
+      ;;
+    -cs | -sc)
+      SHADES_MODE=true
+      COMPLEMENTARY_MODE=true
+      ;;
+    *)
+      filtered_args+=("$1")
+      ;;
+  esac
+  shift # Move to the next argument
+done
+
+shopt -u nocasematch # Restore default case-sensitive behavior
+
+set -- "${filtered_args[@]}" # Set positional args to remaining items (text/color)
+
+if [ "$#" -lt 1 ]; then
+  usage
+fi
+
+color_input="${!#}" # The last remaining argument is always the color
+
+# Determine the final text to use with clear precedence
+if [ -n "$user_text" ]; then
+  # Priority 1: Text from the --text flag
+  text_to_color="$user_text"
+elif [ "$#" -gt 1 ]; then
+  # Priority 2: Old-style positional text
+  text_to_color="${@:1:$#-1}"
+else
+  # Priority 3: Default text
+  text_to_color="$DEFAULT_TEXT"
+fi
+
+# --- Color Conversion Logic ---
+if [[ "$color_input" == *","* ]]; then
+  R=$(echo "$color_input" | cut -d',' -f1); G=$(echo "$color_input" | cut -d',' -f2); B=$(echo "$color_input" | cut -d',' -f3)
+else
+  hex_color="${color_input#\#}"
+  if [ ${#hex_color} -ne 6 ]; then
+    echo "Error: Invalid HEX color format. Must be 6 characters."
+    usage
+  fi
+  R=$((16#${hex_color:0:2})); G=$((16#${hex_color:2:2})); B=$((16#${hex_color:4:2}))
+fi
+
+# --- Main Execution Logic ---
+if [ "$SHADES_MODE" = true ]; then
+  generate_shades "$R" "$G" "$B" "$text_to_color"
+  if [ "$COMPLEMENTARY_MODE" = true ]; then
+    echo; echo "===== Complementary Shades ====="
+    comp_R=$((255 - R)); comp_G=$((255 - G)); comp_B=$((255 - B))
+    generate_shades "$comp_R" "$comp_G" "$comp_B" "$text_to_color"
+  fi
+elif [ "$COMPLEMENTARY_MODE" = true ]; then
+  print_complementary_colors "$R" "$G" "$B" "$text_to_color"
+else
+  print_colored_line "$R" "$G" "$B" "$text_to_color"
+fi
