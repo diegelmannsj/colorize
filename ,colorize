@@ -144,7 +144,7 @@ else
     if [[ "$response" =~ ^[Yy]$ ]]; then
       echo "Downloading to $USER_RGB_TXT_PATH..."
       mkdir -p "$USER_COLORIZE_DIR"
-      local url="https://gitlab.freedesktop.org/xorg/app/rgb/-/raw/master/rgb.txt"
+      url="https://gitlab.freedesktop.org/xorg/app/rgb/-/raw/master/rgb.txt"
       if command -v curl &> /dev/null; then
         curl -fLo "$USER_RGB_TXT_PATH" "$url" || { echo "Download failed with curl." >&2; exit 1; }
       elif command -v wget &> /dev/null; then
